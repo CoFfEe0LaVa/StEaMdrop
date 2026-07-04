@@ -47,17 +47,12 @@ class TestSteamDrop(unittest.TestCase):
                 os.remove("test_file.txt")
 
     @patch('steamdrop.transfer.requests.Session.post')
-    @patch('libarchive.memory_writer')
-    def test_transfer_upload(self, mock_writer, mock_post):
+    def test_transfer_upload(self, mock_post):
         # Dummy file
         with open("test_file.txt", "w") as f:
             f.write("test content")
 
         try:
-            # Mock libarchive context manager
-            mock_archive = MagicMock()
-            mock_writer.return_value.__enter__.return_value = mock_archive
-
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_post.return_value = mock_response

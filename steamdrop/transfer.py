@@ -4,21 +4,52 @@ import plistlib
 import logging
 import requests
 import gzip
-import tarfile # CPIO is hard in standard python, using tar as fallback or find a way.
-# Actually, I'll use a simple CPIO implementation if possible or just use what OpenDrop did.
-# Wait, OpenDrop used libarchive. I've installed libarchive-c.
-import libarchive
-import socket
 
 logger = logging.getLogger(__name__)
+
+def create_cpio_newc(filename):
+    """
+    Creates a simple CPIO archive in 'newc' format containing one file.
+    AirDrop expects this format.
+    """
+    def pad(data, alignment):
+        p = len(data) % alignment
+        if p == 0: return b''
+        return b'\x00' * (alignment - p)
+
+    with open(filename, 'rb') as f:
+        content = f.read()
+
+    size = len(content)
+    name = os.path.basename(filename)
+    namesize = len(name) + 1 # include null terminator
+    mode = 0o100644 # Regular file
+
+    # newc header: 6 chars magic + 13 fields * 8 chars hex
+    # magic: 070701
+    # fields: ino, mode, uid, gid, nlink, mtime, filesize, devmajor, devminor, rdevmajor, rdevminor, namesize, check
+    header = f"070701{0:08x}{mode:08x}{0:08x}{0:08x}{1:08x}{0:08x}{size:08x}{0:08x}{0:08x}{0:08x}{0:08x}{namesize:08x}{0:08x}"
+
+    archive = header.encode('ascii') + name.encode('ascii') + b'\x00'
+    archive += pad(archive, 4)
+    archive += content
+    archive += pad(archive, 4)
+
+    # Trailer
+    trailer_name = "TRAILER!!!"
+    trailer_namesize = len(trailer_name) + 1
+    trailer_header = f"070701{0:08x}{0:08x}{0:08x}{0:08x}{1:08x}{0:08x}{0:08x}{0:08x}{0:08x}{0:08x}{0:08x}{trailer_namesize:08x}{0:08x}"
+    archive += trailer_header.encode('ascii') + trailer_name.encode('ascii') + b'\x00'
+    archive += pad(archive, 4)
+
+    # Final padding to 512 bytes is often done but maybe not strictly required for newc
+    return archive
 
 class AirDropClient:
     def __init__(self, target_host, target_port=8770):
         self.target_host = target_host
         self.target_port = target_port
         self.session = requests.Session()
-        # AirDrop usually uses HTTPS with self-signed certs or specific certs.
-        # For "Everyone" mode, it might be simpler or we might need to skip verification.
         self.session.verify = False
         self.base_url = f"https://{target_host}:{target_port}"
 
@@ -29,11 +60,10 @@ class AirDropClient:
             "User-Agent": "AirDrop/1.0",
         }
         url = f"{self.base_url}{endpoint}"
-        try:
-            # We use IPv6 addresses often, so we need to handle brackets if needed
-            if ":" in self.target_host and not self.target_host.startswith("["):
-                url = f"https://[{self.target_host}]:{self.target_port}{endpoint}"
+        if ":" in self.target_host and not self.target_host.startswith("["):
+            url = f"https://[{self.target_host}]:{self.target_port}{endpoint}"
 
+        try:
             response = self.session.post(url, data=plist_data, headers=headers, timeout=30)
             if response.status_code == 200:
                 return True, plistlib.loads(response.content)
@@ -45,9 +75,7 @@ class AirDropClient:
             return False, None
 
     def ask(self, filename, computer_name="SteamDrop PC", model_name="MacBookPro15,1"):
-        # We need a unique SenderID, usually a random 12-char hex string
         sender_id = os.urandom(6).hex()
-
         file_size = os.path.getsize(filename)
         base_name = os.path.basename(filename)
 
@@ -71,17 +99,12 @@ class AirDropClient:
 
     def upload(self, filename):
         # AirDrop expects a gzipped CPIO archive
-        archive_path = f"{filename}.cpio.gz"
-
-        # Using libarchive-c to create CPIO
-        with libarchive.file_writer(archive_path, 'cpio', 'gzip') as archive:
-            archive.add_file(filename)
-
-        with open(archive_path, "rb") as f:
-            archive_data = f.read()
-
-        # Clean up temporary archive
-        os.remove(archive_path)
+        try:
+            cpio_data = create_cpio_newc(filename)
+            archive_data = gzip.compress(cpio_data)
+        except Exception as e:
+            logger.error(f"Error creating CPIO archive: {e}")
+            return False
 
         headers = {
             "Content-Type": "application/octet-stream",
@@ -108,7 +131,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     client = AirDropClient(sys.argv[1])
     if client.ask(sys.argv[2]):
-        print("Permission granted (or at least /Ask succeeded), uploading...")
+        print("Permission granted, uploading...")
         if client.upload(sys.argv[2]):
             print("Upload successful!")
         else:
