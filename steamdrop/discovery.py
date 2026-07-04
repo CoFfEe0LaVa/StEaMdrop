@@ -1,5 +1,6 @@
 import logging
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -8,10 +9,9 @@ class AirDropBrowser:
         self.zeroconf = Zeroconf()
         self.discovered_devices = {}
 
-    def browse(self, timeout=5):
+    async def browse(self, timeout=10):
         browser = ServiceBrowser(self.zeroconf, "_airdrop._tcp.local.", self)
-        import time
-        time.sleep(timeout)
+        await asyncio.sleep(timeout)
         browser.cancel()
         return self.discovered_devices
 
@@ -49,13 +49,16 @@ class AirDropBrowser:
     def close(self):
         self.zeroconf.close()
 
-if __name__ == "__main__":
+async def _main():
     logging.basicConfig(level=logging.INFO)
     browser = AirDropBrowser()
     try:
         print("Browsing for AirDrop devices...")
-        devices = browser.browse()
+        devices = await browser.browse()
         for dev_id, info in devices.items():
             print(f"Found: {info['name']} - {info['addresses']}:{info['port']} (Model: {info['model']})")
     finally:
         browser.close()
+
+if __name__ == "__main__":
+    asyncio.run(_main())

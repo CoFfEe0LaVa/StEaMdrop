@@ -37,7 +37,7 @@ async def main():
     browser = AirDropBrowser()
     print(f"Browsing for AirDrop devices (timeout {args.timeout}s)...")
     try:
-        devices = browser.browse(timeout=args.timeout)
+        devices = await browser.browse(timeout=args.timeout)
     finally:
         browser.close()
 

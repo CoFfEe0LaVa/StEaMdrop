@@ -34,6 +34,12 @@ class AirDropWakeUp:
         # we provide a placeholder or use a subprocess call to hcitool/hciconfig if on Linux.
         try:
             import subprocess
+            import shutil
+
+            if shutil.which("hcitool") is None:
+                logger.info("hcitool not found. Skipping BLE advertisement. Manual discovery required.")
+                return
+
             # This is very Linux/BlueZ specific.
             # We use 'hcitool' to send a raw HCI command for advertisement.
             # Apple Manufacturer Data: 4c 00 (Apple) 05 (AirDrop) 12 (Length) ...
@@ -41,22 +47,22 @@ class AirDropWakeUp:
             # Note: This usually requires root privileges.
 
             # 1. Stop any current advertising
-            subprocess.run(["sudo", "hciconfig", "hci0", "noadv"], check=False)
+            subprocess.run(["sudo", "hciconfig", "hci0", "noadv"], capture_output=True)
 
             # 2. Set advertisement data
             # Data: 0x1a (length 26), 0xff (mfg data), 4c 00 (apple), 05 (airdrop), ...
             adv_data = "1e 02 01 1a 1a ff 4c 00 05 12 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"
             cmd = ["sudo", "hcitool", "-i", "hci0", "cmd", "0x08", "0x0008"] + adv_data.split()
-            subprocess.run(cmd, check=False)
+            subprocess.run(cmd, capture_output=True)
 
             # 3. Enable advertising
-            subprocess.run(["sudo", "hciconfig", "hci0", "leadv", "3"], check=False)
+            subprocess.run(["sudo", "hciconfig", "hci0", "leadv", "3"], capture_output=True)
 
             logger.info("BLE advertisement sent via hcitool.")
             await asyncio.sleep(duration)
 
             # 4. Disable advertising
-            subprocess.run(["sudo", "hciconfig", "hci0", "noadv"], check=False)
+            subprocess.run(["sudo", "hciconfig", "hci0", "noadv"], capture_output=True)
 
         except Exception as e:
             logger.error(f"Failed to initiate BLE advertisement: {e}")
