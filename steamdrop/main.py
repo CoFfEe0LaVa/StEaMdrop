@@ -3,9 +3,14 @@ import asyncio
 import logging
 import sys
 import os
-from steamdrop.discovery import AirDropBrowser
-from steamdrop.transfer import AirDropClient
-from steamdrop.ble_wakeup import AirDropWakeUp
+try:
+    from steamdrop.discovery import AirDropBrowser
+    from steamdrop.transfer import AirDropClient
+    from steamdrop.ble_wakeup import AirDropWakeUp
+except ImportError:
+    from discovery import AirDropBrowser
+    from transfer import AirDropClient
+    from ble_wakeup import AirDropWakeUp
 
 async def main():
     parser = argparse.ArgumentParser(description="SteamDrop: AirDrop from PC to iPhone")
