@@ -1,0 +1,6 @@
+zeroconf
+requests
+bleak
+libarchive-c
+pytest
+pytest-mock
