@@ -9,7 +9,7 @@ from steamdrop.transfer import AirDropClient
 
 @pytest.mark.asyncio
 async def test_discovery():
-    with patch('steamdrop.discovery.Zeroconf'), \
+    with patch('steamdrop.discovery.AsyncZeroconf'), \
          patch('steamdrop.discovery.ServiceBrowser'):
         browser = AirDropBrowser()
 
@@ -19,8 +19,11 @@ async def test_discovery():
         mock_info.port = 8770
         mock_info.properties = {b"model": b"iPhone12,1"}
 
-        with patch.object(browser.zeroconf, 'get_service_info', return_value=mock_info):
-            browser.add_service(browser.zeroconf, "_airdrop._tcp.local.", "test-device._airdrop._tcp.local.")
+        async def mock_async_get_info(*args, **kwargs):
+            return mock_info
+
+        with patch.object(browser.aiozc, 'async_get_service_info', side_effect=mock_async_get_info):
+            await browser._async_add_service("_airdrop._tcp.local.", "test-device._airdrop._tcp.local.")
 
         assert "test-device" in browser.discovered_devices
         assert browser.discovered_devices["test-device"]["model"] == "iPhone12,1"

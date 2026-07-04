@@ -39,7 +39,7 @@ async def main():
     try:
         devices = await browser.browse(timeout=args.timeout)
     finally:
-        browser.close()
+        await browser.close()
 
     if not devices:
         print("No AirDrop devices found. Make sure AirDrop is set to 'Everyone' on the target device.")
